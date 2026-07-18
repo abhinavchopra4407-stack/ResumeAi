@@ -1,7 +1,7 @@
 # ResumeAi
 ### AI-Powered Resume Screening, ATS Scoring, and Interview Assistant
 
-ResumeIQ AI is a smart recruitment and candidate preparation platform. It automates resume parsing, computes structural and keyword-based ATS alignment scores, identifies critical skill gaps, recommends career roadmaps, and conducts interactive AI-powered mock interviews. It helps recruiters evaluate applicants faster and empowers candidates with actionable, personalized career feedback.
+ResumeIQ AI is a smart recruitment and candidate preparation platform. It automates resume parsing, computes structural and keyword-based ATS alignment scores, identifies critical skill gaps, recommends career roadmaps, and conducts interactive AI-powered mock interviews. It helps recruiters evaluate applicants faster and empowers candidates with actionable, personalized career feedback. Website Link :- https://resume-ai-nine.vercel.app
 
 
 ## 📋 Table of Contents
