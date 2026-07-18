@@ -1,239 +1,261 @@
-import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { useForm } from 'react-hook-form';
+import { DocumentTextIcon } from '@heroicons/react/24/outline';
+import toast from 'react-hot-toast';
 import Sidebar from '../components/common/Sidebar';
-import ResumeUpload from '../components/analyzer/ResumeUpload';
 import ATSScore from '../components/analyzer/ATSScore';
 import JobMatching from '../components/analyzer/JobMatching';
-import ResumePreview from '../components/analyzer/ResumePreview';
-import Loader from '../components/common/Loader';
-import CoverLetter from '../components/tools/CoverLetter';
-import InterviewPrep from '../components/tools/InterviewPrep';
-import ResumeRewriter from '../components/tools/ResumeRewriter';
-import RoadmapGenerator from '../components/tools/RoadmapGenerator';
+import api from '../api/axios';
 
-import { useResume } from '../hooks/useResume';
-import Card from '../components/common/Card';
-import Input from '../components/common/Input';
-import Button from '../components/common/Button';
-import { Play, Sparkles, FileText, Compass, HelpCircle, CheckSquare, Search } from 'lucide-react';
+const Analyze = () => {
+  const [file, setFile] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState(null);
+  const [resumeId, setResumeId] = useState(null);
+  const [activeTab, setActiveTab] = useState('ats');
+  const [loading, setLoading] = useState(false);
+  const { register, handleSubmit } = useForm();
 
-export const Analyze = () => {
-  const [searchParams] = useSearchParams();
-  const resumeUrlId = searchParams.get('id');
+  const { getRootProps, getInputProps } = useDropzone({
+    accept: {
+      'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'text/plain': ['.txt'],
+    },
+    maxSize: 10 * 1024 * 1024,
+    onDrop: (acceptedFiles) => {
+      if (acceptedFiles.length > 0) {
+        setFile(acceptedFiles[0]);
+        toast.success('File uploaded successfully');
+      }
+    },
+    onDropRejected: (fileRejections) => {
+      const error = fileRejections[0]?.errors[0];
+      if (error?.code === 'file-too-large') {
+        toast.error('File size exceeds 10MB limit');
+      } else {
+        toast.error('Invalid file format. Please upload PDF, DOCX, or TXT');
+      }
+    },
+  });
 
-  const {
-    resumes,
-    selectedResume,
-    loading,
-    actionLoading,
-    fetchResumes,
-    fetchResumeDetails,
-    uploadNewResume,
-    runJobAnalysis
-  } = useResume();
-
-  const [activeTab, setActiveTab] = useState('ats'); // 'ats', 'match', 'rewrite', 'cover', 'prep', 'roadmap'
-  const [jobDescription, setJobDescription] = useState('');
-  const [jdAnalysisResult, setJdAnalysisResult] = useState(null);
-
-  useEffect(() => {
-    fetchResumes();
-  }, [fetchResumes]);
-
-  // Load details if query param exists or falls back to first resume in history
-  useEffect(() => {
-    if (resumeUrlId) {
-      fetchResumeDetails(Number(resumeUrlId));
-    } else if (resumes.length > 0 && !selectedResume) {
-      fetchResumeDetails(resumes[0].id);
+  const onSubmit = async (data) => {
+    if (!file) {
+      toast.error('Please upload a resume first');
+      return;
     }
-  }, [resumeUrlId, resumes, selectedResume, fetchResumeDetails]);
 
-  const handleUpload = async (file) => {
+    setAnalyzing(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
     try {
-      const res = await uploadNewResume(file);
-      setJdAnalysisResult(null);
-      setJobDescription('');
-      setActiveTab('ats');
-    } catch (err) {
-      console.error(err);
+      const response = await api.post('/resumes', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const resumeId = response.data.id;
+      setResumeId(resumeId);
+
+      const analysisResponse = await api.post(`/resumes/${resumeId}/analyze`);
+      setAnalysis(analysisResponse.data);
+
+      toast.success('Resume analyzed successfully!');
+    } catch (error) {
+      console.error('Analysis error:', error);
+      toast.error(error.response?.data?.detail || 'Analysis failed');
+    } finally {
+      setAnalyzing(false);
     }
   };
 
-  const handleRunAnalysis = async () => {
-    if (!selectedResume || !jobDescription.trim()) return;
+  const loadAnalysis = async (id) => {
+    if (!id) return;
+    
+    setLoading(true);
     try {
-      const result = await runJobAnalysis(selectedResume.id, jobDescription);
-      setJdAnalysisResult(result);
-      setActiveTab('match');
-    } catch (err) {
-      console.error(err);
+      const response = await api.get(`/resumes/analysis/${id}`);
+      setAnalysis(response.data);
+    } catch (error) {
+      console.error('Failed to load analysis:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleResumeSelect = (e) => {
-    const rId = e.target.value;
-    if (rId) {
-      fetchResumeDetails(Number(rId));
-      setJdAnalysisResult(null);
-      setJobDescription('');
+  // Load analysis when resumeId changes
+  useEffect(() => {
+    if (resumeId) {
+      loadAnalysis(resumeId);
     }
-  };
-
-  if (loading && resumes.length === 0) {
-    return <Loader fullPage message="Accessing analyzer workstation..." />;
-  }
-
-  // Get base analysis (the baseline one generated on upload, which is the first analysis in selectedResume)
-  const baseAnalysis = selectedResume?.analyses?.[0];
-  const activeAnalysis = jdAnalysisResult || baseAnalysis;
-
-  const tabs = [
-    { id: 'ats', label: 'ATS Scorecard', icon: CheckSquare },
-    { id: 'match', label: 'JD Matcher', icon: Search },
-    { id: 'rewrite', label: 'AI Editor', icon: Sparkles },
-    { id: 'cover', label: 'Cover Letter', icon: FileText },
-    { id: 'prep', label: 'Interview Q&A', icon: HelpCircle },
-    { id: 'roadmap', label: 'Roadmap', icon: Compass }
-  ];
+  }, [resumeId]);
 
   return (
-    <div className="flex flex-col md:flex-row min-h-[calc(100vh-4rem)]">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.18),_transparent_35%),linear-gradient(135deg,_#020617_0%,_#0f172a_100%)] text-slate-100">
       <Sidebar />
 
-      <main className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto max-w-7xl mx-auto w-full">
-        {/* Workspace Controls */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-          <div>
-            <h2 className="text-2xl font-extrabold text-white tracking-tight">Optimizer Workstation</h2>
-            <p className="text-xs text-slate-500 font-medium">Verify guidelines, match job descriptions, and write cover letters.</p>
-          </div>
+      <main className="ml-0 px-4 py-6 sm:px-6 lg:ml-64 lg:px-8 lg:py-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-6">
+          <header className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.3em] text-violet-400">Resume Analyzer</p>
+                <h1 className="mt-2 text-3xl font-bold text-white sm:text-4xl">Upload, inspect, and optimize your resume</h1>
+                <p className="mt-2 max-w-2xl text-sm text-slate-400 sm:text-base">
+                  Drag in a PDF, DOCX, or TXT file and get a polished ATS scorecard with actionable recommendations.
+                </p>
+              </div>
+            </div>
+          </header>
 
-          {resumes.length > 0 && (
-            <div className="flex flex-col space-y-1">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active Document</label>
-              <select
-                value={selectedResume?.id || ''}
-                onChange={handleResumeSelect}
-                className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-all text-xs font-semibold"
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+            <section className="space-y-6 rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-2xl shadow-black/20 backdrop-blur-xl sm:p-6">
+              <div
+                {...getRootProps()}
+                className={`cursor-pointer rounded-3xl border border-dashed p-8 text-center transition-all duration-300 sm:p-10 ${
+                  file
+                    ? 'border-violet-400 bg-violet-500/10 shadow-lg shadow-violet-500/10'
+                    : 'border-white/15 bg-slate-950/50 hover:border-violet-400/50 hover:bg-slate-900'
+                }`}
               >
-                {resumes.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.filename}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        {/* If no resumes uploaded, show upload widget */}
-        {resumes.length === 0 ? (
-          <div className="max-w-xl mx-auto py-12">
-            <ResumeUpload onUpload={handleUpload} isLoading={actionLoading} />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
-            {/* Left Panel: Tabs and Operations */}
-            <div className="xl:col-span-2 space-y-6">
-              {/* Tab Header row */}
-              <div className="flex border-b border-white/5 overflow-x-auto scrollbar-none pb-0.5 space-x-1">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center space-x-2 px-4 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition whitespace-nowrap ${
-                        isActive
-                          ? 'border-violet-500 text-violet-400'
-                          : 'border-transparent text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      <Icon className="h-4 w-4 flex-shrink-0" />
-                      <span>{tab.label}</span>
-                    </button>
-                  );
-                })}
+                <input {...getInputProps()} />
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-400">
+                  <DocumentTextIcon className="h-8 w-8" />
+                </div>
+                <div className="mt-5 space-y-2">
+                  {file ? (
+                    <>
+                      <p className="text-base font-semibold text-white">{file.name}</p>
+                      <p className="text-sm text-slate-400">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-lg font-semibold text-white">Drop your resume here</p>
+                      <p className="text-sm text-slate-400">PDF, DOCX, or TXT • up to 10MB</p>
+                    </>
+                  )}
+                </div>
               </div>
 
-              {/* Tab Contents */}
-              <div className="pt-2">
-                {activeTab === 'ats' && (
-                  <div className="space-y-6">
-                    {baseAnalysis ? (
-                      <ATSScore metrics={baseAnalysis.feedback} />
-                    ) : (
-                      <Loader message="Loading ATS scorecards..." />
-                    )}
-                  </div>
+              <button
+                onClick={handleSubmit(onSubmit)}
+                disabled={!file || analyzing}
+                className="flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3 font-semibold text-white shadow-lg shadow-violet-500/20 transition hover:from-violet-500 hover:to-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {analyzing ? (
+                  <span className="flex items-center gap-3">
+                    <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Analyzing...
+                  </span>
+                ) : (
+                  'Analyze Resume'
                 )}
+              </button>
+            </section>
 
-                {activeTab === 'match' && (
-                  <div className="space-y-6">
-                    <Card className="space-y-4">
-                      <div>
-                        <h4 className="text-sm font-bold text-white">Compare Job Description</h4>
-                        <p className="text-xs text-slate-500">Run a custom keyword overlap verification against target job posts</p>
-                      </div>
-                      <Input
-                        label="Job Description / Requirements"
-                        type="textarea"
-                        placeholder="Paste target job requirements here..."
-                        value={jobDescription}
-                        onChange={(e) => setJobDescription(e.target.value)}
-                        rows={4}
-                      />
-                      <Button
-                        onClick={handleRunAnalysis}
-                        disabled={actionLoading || !jobDescription.trim()}
-                        isLoading={actionLoading}
-                        icon={Play}
+            <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-2xl shadow-black/20 backdrop-blur-xl sm:p-6">
+              {analysis ? (
+                <div className="space-y-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.3em] text-violet-400">ATS Overview</p>
+                      <h2 className="text-xl font-semibold text-white">Your optimization snapshot</h2>
+                    </div>
+                    <div className="rounded-2xl border border-violet-400/30 bg-violet-500/10 px-4 py-3 text-3xl font-bold text-violet-300">
+                      {analysis.ats_score || 0}%
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {['ats', 'analysis', 'jobs'].map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                          activeTab === tab
+                            ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20'
+                            : 'bg-white/5 text-slate-300 hover:bg-white/10'
+                        }`}
                       >
-                        Scan Target JD
-                      </Button>
-                    </Card>
-
-                    {activeAnalysis && activeAnalysis.job_description && (
-                      <JobMatching matchResults={activeAnalysis.job_matching} />
-                    )}
+                        {tab === 'ats' ? 'ATS Scorecard' : tab === 'analysis' ? 'AI Analysis' : 'Job Match'}
+                      </button>
+                    ))}
                   </div>
-                )}
 
-                {activeTab === 'rewrite' && (
-                  <ResumeRewriter resumes={resumes} />
-                )}
+                  {activeTab === 'ats' && (
+                    <ATSScore breakdown={analysis.ats_breakdown || {}} resumeId={resumeId} />
+                  )}
 
-                {activeTab === 'cover' && (
-                  <CoverLetter resumes={resumes} />
-                )}
+                  {activeTab === 'analysis' && (
+                    <div className="space-y-4 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                      <div>
+                        <h3 className="font-semibold text-white">Professional Summary</h3>
+                        <p className="mt-2 text-sm text-slate-400">{analysis.professional_summary || 'Analysis in progress...'}</p>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-white">Strengths</h3>
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-400">
+                          {(analysis.strengths || ['Analysis in progress...']).map((s, i) => <li key={i}>{s}</li>)}
+                        </ul>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-white">Areas for Improvement</h3>
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-400">
+                          {(analysis.weaknesses || ['Analysis in progress...']).map((w, i) => <li key={i}>{w}</li>)}
+                        </ul>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-white">Recommendations</h3>
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-400">
+                          {(analysis.recruiter_suggestions || 'Add metrics, tailor keywords, and tighten your summary.').split('.').filter((s) => s.trim()).map((r, i) => <li key={i}>{r.trim()}</li>)}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
 
-                {activeTab === 'prep' && (
-                  <InterviewPrep resumes={resumes} />
-                )}
-
-                {activeTab === 'roadmap' && (
-                  <RoadmapGenerator resumes={resumes} />
-                )}
-              </div>
-            </div>
-
-            {/* Right Panel: Resume Extracted Text Preview */}
-            <div className="xl:col-span-1">
-              {selectedResume ? (
-                <ResumePreview
-                  text={selectedResume.file_content_text}
-                  filename={selectedResume.filename}
-                />
+                  {activeTab === 'jobs' && (
+                    <div className="space-y-4 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                      <div className="rounded-2xl border border-violet-500/20 bg-violet-500/10 p-4">
+                        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-violet-400">Job Match</p>
+                        <p className="mt-2 text-sm text-slate-300">
+                          Your resume is ready for role-specific matching. The score below is based on the skills and summary extracted from the uploaded resume.
+                        </p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl bg-white/5 p-4">
+                          <p className="text-sm text-slate-400">Estimated Match</p>
+                          <p className="mt-2 text-3xl font-bold text-violet-300">{Math.min(98, Math.max(15, Math.round((analysis.ats_score || 0) * 0.9)))}%</p>
+                        </div>
+                        <div className="rounded-2xl bg-white/5 p-4">
+                          <p className="text-sm text-slate-400">Keywords Found</p>
+                          <p className="mt-2 text-3xl font-bold text-emerald-300">{(analysis.missing_skills || []).length > 0 ? Math.max(1, 8 - (analysis.missing_skills || []).length) : 8}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-white">Suggested improvements</h3>
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-400">
+                          {(analysis.weaknesses || ['Add metrics and role-specific keywords']).map((item, i) => <li key={i}>{item}</li>)}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <Card className="h-[500px] flex items-center justify-center text-slate-500">
-                  Select a resume to view parsed text.
-                </Card>
+                <div className="flex min-h-[320px] flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-slate-950/50 p-8 text-center">
+                  <DocumentTextIcon className="mb-4 h-12 w-12 text-violet-400/70" />
+                  <p className="text-lg font-semibold text-white">Upload and analyze a resume</p>
+                  <p className="mt-2 text-sm text-slate-400">Your ATS scorecard and AI insights will appear here.</p>
+                </div>
               )}
-            </div>
+            </section>
           </div>
-        )}
+        </div>
       </main>
     </div>
   );

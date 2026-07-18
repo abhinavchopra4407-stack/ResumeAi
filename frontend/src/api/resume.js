@@ -3,7 +3,7 @@ import api from './axios';
 export const uploadResume = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await api.post('/resumes/upload', formData, {
+  const response = await api.post('/resumes', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },

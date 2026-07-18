@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine, ensure_schema
 from app.api import api_router
 
 # Auto-create SQLite database tables on startup
-Base.metadata.create_all(bind=engine)
+ensure_schema()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -14,15 +14,7 @@ app = FastAPI(
 )
 
 # CORS configurations
-# Allowing frontend localhost addresses
-origins = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://localhost:8000",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:8000",
-]
+origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,

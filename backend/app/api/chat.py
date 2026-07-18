@@ -11,6 +11,9 @@ from app.models.resume import Resume
 from app.schemas.chat import ChatCreate, ChatResponse, ChatMessageCreate, MessageSchema
 from app.services.ai_service import AIService
 from app.services.resume_parser import ResumeParser
+from app.services.chat_service import ChatService
+
+chat_service = ChatService()
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -50,7 +53,7 @@ def get_chat(
     return chat
 
 @router.post("/{chat_id}/message", response_model=MessageSchema)
-def send_message(
+async def send_message(
     chat_id: int,
     payload: ChatMessageCreate,
     db: Session = Depends(get_db),
@@ -80,11 +83,22 @@ def send_message(
     }
 
     # Generate response
-    # Combine old messages and new user message
     messages_history = list(chat.messages) if chat.messages else []
-    messages_history.append(user_msg)
     
-    ai_response_text = AIService.get_chat_response(messages_history, resume_text, parsed_data)
+    # Format message history to match OpenAI format: role & content
+    formatted_history = []
+    for msg in messages_history:
+        role = "user" if msg.get("sender") == "user" else "assistant"
+        formatted_history.append({
+            "role": role,
+            "content": msg.get("text", "")
+        })
+    
+    ai_response_text = await chat_service.get_chat_response(
+        message=payload.message,
+        resume_data=parsed_data,
+        chat_history=formatted_history
+    )
     
     ai_msg = {
         "sender": "ai",
@@ -93,7 +107,6 @@ def send_message(
     }
     
     # Save back to database
-    # SQLAlchemy requires flagging JSON attributes as modified, or creating a new list object
     updated_messages = list(chat.messages) if chat.messages else []
     updated_messages.append(user_msg)
     updated_messages.append(ai_msg)

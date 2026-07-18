@@ -3,6 +3,41 @@ import re
 
 class AIService:
     @staticmethod
+    async def generate_resume_analysis(parsed_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate a lightweight resume analysis payload for the UI.
+        """
+        text = parsed_data.get("full_text", "") or ""
+        skills = parsed_data.get("skills", []) or []
+        summary = parsed_data.get("summary", "") or ""
+
+        strengths = []
+        weaknesses = []
+        if skills:
+            strengths.append(f"Identified key skills: {', '.join(skills[:6])}")
+        if summary:
+            strengths.append("Professional summary is present and clearly structured")
+        else:
+            weaknesses.append("Add a short professional summary to improve clarity")
+
+        if len(skills) < 6:
+            weaknesses.append("Expand the skills section with more role-relevant keywords")
+
+        if not text:
+            weaknesses.append("Resume text could not be extracted reliably")
+
+        return {
+            "strengths": strengths or ["Resume structure looks usable"],
+            "weaknesses": weaknesses or ["Add a few more quantified achievements to stand out"],
+            "missing_skills": [],
+            "grammar_issues": [],
+            "formatting_issues": [],
+            "professional_summary": summary or "A concise professional summary will strengthen this resume.",
+            "recruiter_suggestions": "Use stronger action verbs, include metrics, and tailor keywords to the target role.",
+            "overall_review": "The resume is structurally sound and can be improved with targeted keyword optimization."
+        }
+
+    @staticmethod
     def get_chat_response(messages: List[Dict[str, str]], resume_text: str = "", parsed_data: Dict[str, Any] = None) -> str:
         """
         Generates realistic, contextualized AI assistant chat responses about a candidate's resume.

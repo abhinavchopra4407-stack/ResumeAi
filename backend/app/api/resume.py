@@ -1,169 +1,227 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List, Optional
-import json
-
+from typing import List, Dict, Optional
 from app.core.database import get_db
-from app.core.depedencies import get_current_user
+from app.core.security import get_current_user
 from app.models.user import User
 from app.models.resume import Resume
 from app.models.analysis import Analysis
-from app.schemas.resume import ResumeResponse, ResumeDetailsResponse, AnalysisResponse, AnalysisCreateRequest
-
 from app.services.resume_parser import ResumeParser
+from app.services.ai_service import AIService
 from app.services.ats_scorer import ATSScorer
 from app.services.job_matcher import JobMatcher
-from app.services.report_generator import ReportGenerator
+from app.schemas.resume import ResumeCreate, ResumeResponse, AnalysisResponse, ResumeDetailsResponse
+import shutil
+from datetime import datetime
+import os
+import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
+resume_parser = ResumeParser()
+ai_service = AIService()
+ats_scorer = ATSScorer()
+job_matcher = JobMatcher()
 
-@router.post("/upload", response_model=ResumeDetailsResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ResumeResponse, status_code=status.HTTP_201_CREATED)
 async def upload_resume(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    # Read file content
-    contents = await file.read()
-    filename = file.filename
-    
-    # Try to decode as text
-    try:
-        file_content_text = contents.decode("utf-8")
-    except UnicodeDecodeError:
-        # If it's a binary file (like a PDF/DOCX), we simulate text extraction
-        # Let's create a realistic mockup resume based on the filename to showcase parsing
-        name_part = filename.split(".")[0].replace("_", " ").replace("-", " ").title()
-        if "frontend" in filename.lower() or "react" in filename.lower():
-            file_content_text = (
-                f"{name_part}\n"
-                "Email: developer@example.com | Phone: (555) 123-4567\n"
-                "Experience:\n"
-                "Senior Frontend Engineer at TechSolutions Inc (2023 - Present)\n"
-                "- Led React dashboard rewrite improving performance by 40% using virtual lists.\n"
-                "- Mentored 4 junior developers and established CI/CD guidelines for Jest tests.\n"
-                "Software Engineer at WebApps Corp (2021 - 2023)\n"
-                "- Built responsiveness interfaces and streamlined Tailwind CSS UI components.\n"
-                "Education:\n"
-                "BS in Computer Science, University of Technology\n"
-                "Skills: React, JavaScript, TypeScript, Tailwind CSS, Jest, Git, Redux, HTML, CSS"
-            )
-        elif "backend" in filename.lower() or "python" in filename.lower():
-            file_content_text = (
-                f"{name_part}\n"
-                "Email: backend.dev@example.com | Phone: (555) 987-6543\n"
-                "Experience:\n"
-                "Senior Backend Developer at CloudScale Systems (2022 - Present)\n"
-                "- Designed scalable FastAPI microservices handling 10k+ concurrent requests.\n"
-                "- Built data pipeline in Python and optimized PostgreSQL query indexes by 35%.\n"
-                "Software Developer at CoreSystems (2020 - 2022)\n"
-                "- Maintained Python Flask APIs and SQLite configurations.\n"
-                "Education:\n"
-                "MS in Software Engineering, State University\n"
-                "Skills: Python, FastAPI, Django, PostgreSQL, Docker, AWS, Git, SQLite, SQL, Redis"
-            )
-        else:
-            file_content_text = (
-                f"{name_part}\n"
-                "Email: candidate.resume@example.com | Phone: (555) 000-1111\n"
-                "Experience:\n"
-                "Software Engineer at Innovate LLC (2022 - Present)\n"
-                "- Developed enterprise applications using JavaScript and Python.\n"
-                "- Boosted application coverage tests by 20%.\n"
-                "Education:\n"
-                "BS in Computer Science, State College\n"
-                "Skills: JavaScript, Python, SQL, Docker, React, Git, REST APIs"
-            )
-            
-    # Save Resume Model
-    db_resume = Resume(
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    file_bytes = await file.read()
+    file_name = file.filename
+    file_path = os.path.join("/tmp", f"{current_user.id}_{datetime.utcnow().timestamp()}_{file_name}")
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "wb") as f:
+        f.write(file_bytes)
+
+    parsed_data = await resume_parser.parse(file_bytes, file_name)
+    resume = Resume(
         user_id=current_user.id,
-        filename=filename,
-        file_content_text=file_content_text
+        filename=file_name,
+        file_content_text=parsed_data.get("full_text", "")
     )
-    db.add(db_resume)
+    db.add(resume)
     db.commit()
-    db.refresh(db_resume)
+    db.refresh(resume)
 
-    # Perform initial baseline ATS analysis (with empty job description)
-    parsed_data = ResumeParser.parse_text(file_content_text)
-    ats_results = ATSScorer.calculate_score(file_content_text, parsed_data)
-    match_results = JobMatcher.match_resume(file_content_text, parsed_data.get("skills", []), "")
-    report = ReportGenerator.generate_report(parsed_data, ats_results, match_results)
-    
-    db_analysis = Analysis(
-        resume_id=db_resume.id,
-        job_description="",
-        ats_score=ats_results.get("ats_score", 0),
-        feedback=report.get("ats_metrics"),
-        job_matching=report.get("job_match")
-    )
-    db.add(db_analysis)
-    db.commit()
-    db.refresh(db_resume)
+    return resume
 
-    return db_resume
-
-@router.get("", response_model=List[ResumeResponse])
-def get_resumes(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+@router.get("", response_model=List[ResumeDetailsResponse])
+def list_resumes(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    resumes = db.query(Resume).filter(Resume.user_id == current_user.id).order_by(Resume.uploaded_at.desc()).all()
-    return resumes
+    return db.query(Resume).filter(Resume.user_id == current_user.id).order_by(Resume.id.desc()).all()
 
 @router.get("/{resume_id}", response_model=ResumeDetailsResponse)
-def get_resume(
-    resume_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+def get_resume(resume_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == current_user.id).first()
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
     return resume
 
 @router.post("/{resume_id}/analyze", response_model=AnalysisResponse)
-def analyze_resume(
+async def analyze_resume(
     resume_id: int,
-    payload: AnalysisCreateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    # Find resume
-    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == current_user.id).first()
-    if not resume:
-        raise HTTPException(status_code=404, detail="Resume not found")
+    """Analyze a resume with full ATS scoring"""
+    try:
+        # Get the resume
+        resume = db.query(Resume).filter(
+            Resume.id == resume_id,
+            Resume.user_id == current_user.id
+        ).first()
         
-    # Perform analysis against job description
-    parsed_data = ResumeParser.parse_text(resume.file_content_text)
-    ats_results = ATSScorer.calculate_score(resume.file_content_text, parsed_data)
-    match_results = JobMatcher.match_resume(resume.file_content_text, parsed_data.get("skills", []), payload.job_description)
-    report = ReportGenerator.generate_report(parsed_data, ats_results, match_results)
-    
-    # Save Analysis Model
-    db_analysis = Analysis(
-        resume_id=resume.id,
-        job_description=payload.job_description,
-        ats_score=match_results.get("match_score", 0), # Match score acts as the target score here
-        feedback=report.get("ats_metrics"),
-        job_matching=report.get("job_match")
-    )
-    db.add(db_analysis)
-    db.commit()
-    db.refresh(db_analysis)
-    
-    return db_analysis
+        if not resume:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Resume not found"
+            )
+        
+        logger.info(f"Analyzing resume {resume_id} for user {current_user.email}")
+        
+        # Parse the resume using stored extracted text
+        parsed_data = None
+        if resume.file_content_text:
+            parsed_data = resume_parser.parse_text(resume.file_content_text)
 
-@router.delete("/{resume_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_resume(
-    resume_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+        if not parsed_data or not parsed_data.get('full_text'):
+            logger.info("No usable extracted text found; returning empty analysis")
+            parsed_data = resume_parser.parse_text("")
+        
+        # Calculate ATS score
+        try:
+            ats_data = ats_scorer.calculate_score(parsed_data)
+            ats_score = int(round(ats_data.get("total_score", 0)))
+            logger.info(f"ATS Score calculated: {ats_score}")
+        except Exception as e:
+            logger.error(f"ATS scoring failed: {str(e)}")
+            ats_data = {
+                "total_score": 0,
+                "breakdown": {},
+                "recommendations": ["ATS scoring failed. Please try again."]
+            }
+        
+        # Generate AI analysis
+        try:
+            analysis_data = await ai_service.generate_resume_analysis(parsed_data)
+            logger.info("AI analysis generated successfully")
+        except Exception as e:
+            logger.error(f"AI analysis failed: {str(e)}")
+            analysis_data = {
+                "strengths": ["Analysis temporarily unavailable"],
+                "weaknesses": ["Please try again later"],
+                "missing_skills": [],
+                "grammar_issues": [],
+                "formatting_issues": [],
+                "professional_summary": "Analysis in progress...",
+                "recruiter_suggestions": "",
+                "overall_review": "Your resume analysis is being processed."
+            }
+        
+        # Check for existing analysis
+        existing_analysis = db.query(Analysis).filter(
+            Analysis.resume_id == resume.id
+        ).first()
+        
+        if existing_analysis:
+            # Update existing analysis
+            existing_analysis.ats_score = ats_score
+            existing_analysis.ats_breakdown = ats_data.get("breakdown", {})
+            existing_analysis.strengths = analysis_data.get("strengths", [])
+            existing_analysis.weaknesses = analysis_data.get("weaknesses", [])
+            existing_analysis.missing_skills = analysis_data.get("missing_skills", [])
+            existing_analysis.grammar_issues = analysis_data.get("grammar_issues", [])
+            existing_analysis.formatting_issues = analysis_data.get("formatting_issues", [])
+            existing_analysis.professional_summary = analysis_data.get("professional_summary", "")
+            existing_analysis.recruiter_suggestions = analysis_data.get("recruiter_suggestions", "")
+            existing_analysis.overall_review = analysis_data.get("overall_review", "")
+            
+            db.commit()
+            db.refresh(existing_analysis)
+            logger.info(f"Updated existing analysis for resume {resume_id}")
+            return existing_analysis
+        
+        # Create new analysis
+        analysis = Analysis(
+            resume_id=resume.id,
+            user_id=current_user.id,
+            ats_score=ats_score,
+            ats_breakdown=ats_data.get("breakdown", {}),
+            strengths=analysis_data.get("strengths", []),
+            weaknesses=analysis_data.get("weaknesses", []),
+            missing_skills=analysis_data.get("missing_skills", []),
+            grammar_issues=analysis_data.get("grammar_issues", []),
+            formatting_issues=analysis_data.get("formatting_issues", []),
+            professional_summary=analysis_data.get("professional_summary", ""),
+            recruiter_suggestions=analysis_data.get("recruiter_suggestions", ""),
+            overall_review=analysis_data.get("overall_review", "")
+        )
+        
+        db.add(analysis)
+        db.commit()
+        db.refresh(analysis)
+        
+        logger.info(f"Created new analysis for resume {resume_id}")
+        return analysis
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in analyze_resume: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Analysis failed: {str(e)}"
+        )
+
+@router.delete("/{resume_id}")
+def delete_resume(resume_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == current_user.id).first()
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
     db.delete(resume)
     db.commit()
-    return {"detail": "Resume deleted successfully"}
+    return {"message": "Resume deleted"}
+
+@router.get("/analysis/{resume_id}")
+async def get_analysis(
+    resume_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get analysis for a specific resume"""
+    analysis = db.query(Analysis).filter(
+        Analysis.resume_id == resume_id,
+        Analysis.user_id == current_user.id
+    ).first()
+    
+    if not analysis:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis not found"
+        )
+    
+    return {
+        "id": analysis.id,
+        "resume_id": analysis.resume_id,
+        "ats_score": analysis.ats_score or 0,
+        "ats_breakdown": analysis.ats_breakdown or {},
+        "strengths": analysis.strengths or [],
+        "weaknesses": analysis.weaknesses or [],
+        "missing_skills": analysis.missing_skills or [],
+        "grammar_issues": analysis.grammar_issues or [],
+        "formatting_issues": analysis.formatting_issues or [],
+        "professional_summary": analysis.professional_summary or "Analysis in progress...",
+        "recruiter_suggestions": analysis.recruiter_suggestions or "",
+        "overall_review": analysis.overall_review or "",
+        "created_at": analysis.created_at
+    }

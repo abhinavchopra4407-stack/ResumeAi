@@ -5,8 +5,18 @@ from datetime import datetime
 class AnalysisResponse(BaseModel):
     id: int
     resume_id: int
+    user_id: Optional[int] = None
     job_description: Optional[str] = None
     ats_score: int
+    ats_breakdown: Optional[Any] = None
+    strengths: Optional[Any] = None
+    weaknesses: Optional[Any] = None
+    missing_skills: Optional[Any] = None
+    grammar_issues: Optional[Any] = None
+    formatting_issues: Optional[Any] = None
+    professional_summary: Optional[str] = None
+    recruiter_suggestions: Optional[str] = None
+    overall_review: Optional[str] = None
     feedback: Optional[Any] = None # JSON structure
     job_matching: Optional[Any] = None # JSON structure
     created_at: datetime

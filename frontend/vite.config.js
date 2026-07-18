@@ -6,12 +6,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    hmr: {
+      overlay: false // Disable error overlay if needed
+    },
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
-        secure: false,
-      }
-    }
-  }
+      },
+    },
+  },
 })
