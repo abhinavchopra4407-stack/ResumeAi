@@ -1,0 +1,37 @@
+John Doe
+john.doe@email.com
+(123) 456-7890
+linkedin.com/in/johndoe
+github.com/johndoe
+
+Professional Summary
+Experienced Software Engineer with a strong background in developing scalable web applications and REST APIs. Skilled in Python, React, and AWS cloud deployment. Proven track record of improving system responsiveness and user retention.
+
+Skills
+Python, JavaScript, TypeScript, React, Node.js, Express.js, FastAPI, MySQL, PostgreSQL, AWS, Docker, Git, Agile, Scrum
+
+Work Experience
+Senior Software Engineer at Tech Solutions (2023 - Present)
+- Spearheaded development of core web application features using React and FastAPI.
+- Optimized database queries in PostgreSQL, reducing query latency by 35%.
+- Managed a team of 4 junior developers using Agile Scrum methodologies.
+
+Software Engineer at Code Builders (2021 - 2023)
+- Engineered scalable REST APIs using Node.js and Express.js.
+- Developed responsive UI components with React and Tailwind CSS.
+- Deployed services to AWS using Docker containers.
+
+Education
+Bachelor of Science in Computer Science
+University of Technology (2017 - 2021)
+GPA: 3.8/4.0
+
+Projects
+Resume Analyzer Platform
+- Developed an AI-powered resume screening tool using FastAPI and React.
+- Integrated NLP techniques to match candidate skills with job descriptions.
+- Set up automated CI/CD pipelines with GitHub Actions.
+
+Certifications
+AWS Certified Solutions Architect
+Certified Scrum Master (CSM)

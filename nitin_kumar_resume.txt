@@ -1,0 +1,34 @@
+Nitin Kumar
+Una, Himachal Pradesh-177213
++91-9805690571 | kumarniti2004@gmail.com | linkedin.com/in/nitin-kumar-297349384 | github.com/nitnk-22
+
+Internship
+Artificial Intelligence Intern at IBM (Feb 2026 - Mar 2026)
+- Executed end-to-end Machine Learning workflows focusing on data handling and basic statistical analysis.
+- Utilized Python and NumPy to process industry-scale datasets, improving analytical thinking.
+- Developed and tested AI-driven models to address specific industry use cases.
+
+Projects
+AgriVision Doctor (Mar 2026 - Jun 2026)
+- Engineered computer vision application leveraging a fine-tuned ResNet-50 CNN architecture for the automatic classification of plant pathogen profiles.
+- Architected Grad-CAM engine to generate real-time structural heatmaps over leaf images.
+- Enhanced the image preprocessing pipeline through advanced Alpha Matting background isolation.
+
+Lung Cancer Detection using CNN (Feb 2026 - Mar 2026)
+- Designed deep learning model using Sequential CNN architecture to classify histopathological lung images.
+- Implemented hierarchical feature extraction pipeline using multiple Conv2D and MaxPooling2D layers.
+
+Crop Yield Prediction (Dec 2025 - Jan 2026)
+- Constructed robust data pipeline to preprocess high-dimensional agricultural data using One-Hot Encoding.
+- Refined performance using Ridge Regression, achieving high precision with low Mean Absolute Error.
+
+Skills
+Languages: Python, HTML
+Technologies/Frameworks: Pandas, NumPy, Scikit-learn, TensorFlow, Matplotlib
+Domain Skills: Data Analysis, Data Cleaning, Feature Engineering, Model Evaluation, Basic Statistics, Data Visualization
+Tools: GitHub, Jupyter Notebook, MS-Excel, IBM Cognos, MySQL
+
+Education
+Lovely Professional University (2025 - Present)
+Master of Computer Applications (MCA) - Artificial Intelligence & Machine Learning
+CGPA: 8.33

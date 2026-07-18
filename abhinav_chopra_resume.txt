@@ -1,0 +1,33 @@
+Abhinav Chopra
+Jaipur, Rajasthan 302013
++91 8290685059 | chopraabhinav53@gmail.com | linkedin.com/in/abhinav-274040346 | github.com/abhinavchopra4407
+
+Projects
+AI Resume Analyzer (April 2026 - May 2026)
+- Built an AI-powered resume analysis platform using Python and Streamlit.
+- Extracted and analyzed resume content using NLP techniques.
+- Matched candidate skills with job requirements and identified missing skills.
+- Integrated LLM APIs to provide AI-based career guidance.
+
+Online Blood Bank Management System (Oct 2025 - Nov 2025)
+- Designed a normalized relational database with ER diagrams.
+- Implemented complex SQL queries, joins, subqueries, and views.
+- Developed triggers and constraints to maintain data integrity.
+
+Road Accident Data Analysis (Sep 2025)
+- Processed and analyzed 10,000+ records using Pandas and NumPy.
+- Performed exploratory data analysis to identify trends by location and severity.
+- Built heatmaps and distributions using Seaborn and Matplotlib.
+
+Skills
+Programming: Python, SQL
+Libraries: Pandas, NumPy, Matplotlib, Seaborn, Scikit-learn
+Tools: Jupyter Notebook, Git, GitHub, VS Code
+Concepts: Data Cleaning, EDA, Data Visualization, Machine Learning
+Soft Skills: Team Collaboration, Analytical Thinking
+
+Education
+Lovely Professional University (2025 - Present)
+Master of Computer Applications (AI & ML)
+Maharshi Dayanand Saraswati University (2021 - 2024)
+Bachelor of Science (PCM)
