@@ -14,7 +14,11 @@ app = FastAPI(
 )
 
 # CORS configurations
-origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
+origins = [
+    "http://localhost:5173",
+    "https://resume-ai-nine.vercel.app",
+    "https://resume-isbnrdmgx-org13.vercel.app",
+]
 
 app.add_middleware(
     CORSMiddleware,
