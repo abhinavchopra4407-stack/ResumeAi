@@ -263,14 +263,12 @@ All requests must be prefixed with `/api/v1`. Protected routes require a Bearer 
 
 ---
 
-## 👥 Academic Project Team
+## 👥 Project Contributors
 
-This project was built and designed as part of a collaborative effort by:
+**Abhinav Chopra**
 
-| Name | Registration No. | Role / Contributions |
-|---|---|---|
-| **Abhinav Chopra** | 12527991 | Frontend Design, Dashboard & Chat integrations |
-| **Priya** | 12503974 | Backend API, Database Architect & JWT auth |
-| **Niyati** | 12507571 | NLP Scorer, Parser Engines & Rule Builders |
-| **Nitin Kumar** | 12525221 | AI integrations (Groq/OpenAI), Deployment & testing |
+**Priya**
 
+**Niyati Dhar**
+
+**Nitin Kumar**
